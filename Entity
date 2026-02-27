@@ -1,0 +1,351 @@
+package com.example.dataloader.entity;
+
+import jakarta.persistence.*;
+import lombok.*;
+
+import java.time.LocalDateTime;
+import java.util.List;
+
+@Entity
+@Table(
+    name = "DATA_LOAD_MASTER",
+    uniqueConstraints = {
+        @UniqueConstraint(name = "UK_DOMAIN_MODEL",
+                columnNames = {"DOMAIN_NAME", "MODEL_NAME"})
+    }
+)
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class DataLoadMaster {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "dlm_seq")
+    @SequenceGenerator(name = "dlm_seq",
+            sequenceName = "SEQ_DATA_LOAD_MASTER",
+            allocationSize = 1)
+    private Long id;
+
+    @Column(name = "DOMAIN_NAME", nullable = false, length = 100)
+    private String domainName;
+
+    @Column(name = "SUB_DOMAIN_NAME", length = 100)
+    private String subDomainName;
+
+    @Column(name = "MODEL_NAME", nullable = false, length = 100)
+    private String modelName;
+
+    @Column(name = "JOB_TYPE", nullable = false, length = 20)
+    private String jobType; // EOD / TIME / CRON
+
+    @Column(name = "PERIOD_TIME", length = 100)
+    private String periodTime;
+
+    @Column(name = "STATUS", length = 2)
+    private String status; // Y / I / C
+
+    @Column(name = "IS_ADHOC", length = 2)
+    private String isAdHoc;
+
+    @Column(name = "DATABASE_INDEX_NAME", length = 50)
+    private String databaseIndexName;
+
+    @Column(name = "LAST_EXECUTION_TIME")
+    private LocalDateTime lastExecutionTime;
+
+    @Column(name = "LAST_EXECUTION_STATUS", length = 20)
+    private String lastExecutionStatus;
+
+    @Column(name = "CREATED_DATE")
+    private LocalDateTime createdDate;
+
+    @Column(name = "UPDATED_DATE")
+    private LocalDateTime updatedDate;
+
+    // ================= Relationships =================
+
+    @OneToOne(mappedBy = "dataLoadMaster",
+            cascade = CascadeType.ALL,
+            fetch = FetchType.LAZY)
+    private QueryMaster queryMaster;
+
+    @OneToMany(mappedBy = "dataLoadMaster",
+            cascade = CascadeType.ALL,
+            fetch = FetchType.LAZY)
+    private List<ChildQueryMaster> childQueries;
+
+    @OneToMany(mappedBy = "dataLoadMaster",
+            cascade = CascadeType.ALL,
+            fetch = FetchType.LAZY)
+    private List<JsonMapper> jsonMappers;
+
+    @OneToMany(mappedBy = "dataLoadMaster",
+            cascade = CascadeType.ALL,
+            fetch = FetchType.LAZY)
+    private List<KeyIndexes> keyIndexes;
+
+    @OneToMany(mappedBy = "dataLoadMaster",
+            cascade = CascadeType.ALL,
+            fetch = FetchType.LAZY)
+    private List<DataLoadJobAudit> audits;
+}
+
+@Entity
+@Table(name = "QUERY_MASTER")
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class QueryMaster {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.SEQUENCE,
+            generator = "qm_seq")
+    @SequenceGenerator(name = "qm_seq",
+            sequenceName = "SEQ_QUERY_MASTER",
+            allocationSize = 1)
+    private Long id;
+
+    @Lob
+    @Column(name = "QUERY", nullable = false)
+    private String query;
+
+    @Column(name = "QUERY_DETAILS", length = 2000)
+    private String queryDetails;
+
+    @Column(name = "MODEL_NAME", length = 100)
+    private String modelName;
+
+    @OneToOne
+    @JoinColumn(name = "MASTER_ID",
+            nullable = false,
+            foreignKey = @ForeignKey(name = "FK_QM_MASTER"))
+    private DataLoadMaster dataLoadMaster;
+}
+
+
+@Entity
+@Table(
+    name = "CHILD_QUERY_MASTER",
+    uniqueConstraints = {
+        @UniqueConstraint(
+            name = "UK_MASTER_SEQ",
+            columnNames = {"MASTER_ID", "SEQ_NO"})
+    }
+)
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class ChildQueryMaster {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.SEQUENCE,
+            generator = "cqm_seq")
+    @SequenceGenerator(name = "cqm_seq",
+            sequenceName = "SEQ_CHILD_QUERY_MASTER",
+            allocationSize = 1)
+    private Long id;
+
+    @Column(name = "SEQ_NO", nullable = false)
+    private Long seqNo;
+
+    @Lob
+    @Column(name = "SUB_QUERY", nullable = false)
+    private String subQuery;
+
+    @Column(name = "QUERY_DETAILS", length = 2000)
+    private String queryDetails;
+
+    @Column(name = "MODEL_NAME", length = 100)
+    private String modelName;
+
+    @Column(name = "STATUS", length = 2)
+    private String status;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "MASTER_ID",
+            nullable = false,
+            foreignKey = @ForeignKey(name = "FK_CQM_MASTER"))
+    private DataLoadMaster dataLoadMaster;
+}
+
+
+
+
+
+
+
+@Entity
+@Table(name = "JSON_MAPPER")
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class JsonMapper {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.SEQUENCE,
+            generator = "jm_seq")
+    @SequenceGenerator(name = "jm_seq",
+            sequenceName = "SEQ_JSON_MAPPER",
+            allocationSize = 1)
+    private Long id;
+
+    @Column(name = "QUERY_TYPE", length = 20)
+    private String queryType; // MASTER / CHILD
+
+    @Column(name = "SUB_QUERY_ID")
+    private Long subQueryId;
+
+    @Column(name = "JPATH", length = 500)
+    private String jPath;
+
+    @Column(name = "COLUMN_NAME", length = 100)
+    private String columnName;
+
+    @Column(name = "COLUMN_DATA_TYPE", length = 50)
+    private String columnDataType;
+
+    @Column(name = "JSON_FIELD", length = 100)
+    private String jsonField;
+
+    @Column(name = "JSON_DATA_TYPE", length = 50)
+    private String jsonDataType;
+
+    @Column(name = "IGNORE_NULL", length = 2)
+    private String ignoreNull;
+
+    @Column(name = "IS_REFERENCE_COLUMN", length = 2)
+    private String isReferenceColumn;
+
+    @Column(name = "REFERENCE_KEY_NAME", length = 100)
+    private String referenceKeyName;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "MASTER_ID",
+            nullable = false,
+            foreignKey = @ForeignKey(name = "FK_JSON_MASTER"))
+    private DataLoadMaster dataLoadMaster;
+}
+
+
+
+
+@Entity
+@Table(name = "KEY_INDEXES")
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class KeyIndexes {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.SEQUENCE,
+            generator = "ki_seq")
+    @SequenceGenerator(name = "ki_seq",
+            sequenceName = "SEQ_KEY_INDEXES",
+            allocationSize = 1)
+    private Long id;
+
+    @Column(name = "SEQ_NO")
+    private Long seqNo;
+
+    @Column(name = "KEY_COMPO_PATTERN", length = 500)
+    private String keyCompoPattern;
+
+    @Column(name = "STATUS", length = 2)
+    private String status;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "MASTER_ID",
+            nullable = false,
+            foreignKey = @ForeignKey(name = "FK_KEY_MASTER"))
+    private DataLoadMaster dataLoadMaster;
+}
+
+
+
+
+
+@Entity
+@Table(name = "DATA_LOAD_JOB_AUDIT")
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class DataLoadJobAudit {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.SEQUENCE,
+            generator = "audit_seq")
+    @SequenceGenerator(name = "audit_seq",
+            sequenceName = "SEQ_DATA_LOAD_JOB_AUDIT",
+            allocationSize = 1)
+    private Long auditId;
+
+    @Column(name = "JOB_START_TIME")
+    private LocalDateTime jobStartTime;
+
+    @Column(name = "JOB_END_TIME")
+    private LocalDateTime jobEndTime;
+
+    @Column(name = "STATUS", length = 20)
+    private String status;
+
+    @Column(name = "TOTAL_MASTER_RECORDS")
+    private Long totalMasterRecords;
+
+    @Column(name = "TOTAL_CHILD_RECORDS")
+    private Long totalChildRecords;
+
+    @Column(name = "TOTAL_REDIS_KEYS")
+    private Long totalRedisKeys;
+
+    @Lob
+    @Column(name = "ERROR_MESSAGE")
+    private String errorMessage;
+
+    @Column(name = "EXECUTED_BY_POD", length = 200)
+    private String executedByPod;
+
+    @Column(name = "EXECUTION_TYPE", length = 20)
+    private String executionType;
+
+    @Column(name = "CREATED_DATE")
+    private LocalDateTime createdDate;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "MASTER_ID",
+            nullable = false,
+            foreignKey = @ForeignKey(name = "FK_AUDIT_MASTER"))
+    private DataLoadMaster dataLoadMaster;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
