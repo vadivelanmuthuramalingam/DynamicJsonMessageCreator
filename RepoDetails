@@ -1,0 +1,65 @@
+@Repository
+public interface DataLoadMasterRepository
+        extends JpaRepository<DataLoadMaster, Long> {
+
+    @Query("""
+        SELECT d FROM DataLoadMaster d
+        WHERE d.status = 'Y'
+        """)
+    List<DataLoadMaster> findEligibleJobs();
+
+}
+
+
+@Repository
+public interface QueryMasterRepository
+        extends JpaRepository<QueryMaster, Long> {
+
+    Optional<QueryMaster> findByDataLoadMaster_Id(Long masterId);
+}
+
+
+
+@Repository
+public interface ChildQueryMasterRepository
+        extends JpaRepository<ChildQueryMaster, Long> {
+
+    List<ChildQueryMaster>
+        findByDataLoadMaster_IdAndStatus(
+                Long masterId,
+                String status);
+}
+
+
+
+@Repository
+public interface JsonMapperRepository
+        extends JpaRepository<JsonMapper, Long> {
+
+    List<JsonMapper>
+        findByDataLoadMaster_Id(Long masterId);
+
+}
+
+
+@Repository
+public interface KeyIndexesRepository
+        extends JpaRepository<KeyIndexes, Long> {
+
+    List<KeyIndexes>
+        findByDataLoadMaster_IdAndStatus(
+                Long masterId,
+                String status);
+}
+
+
+@Repository
+public interface DataLoadJobAuditRepository
+        extends JpaRepository<DataLoadJobAudit, Long> {
+
+    List<DataLoadJobAudit>
+        findByDataLoadMaster_IdOrderByCreatedDateDesc(
+                Long masterId);
+}
+
+
