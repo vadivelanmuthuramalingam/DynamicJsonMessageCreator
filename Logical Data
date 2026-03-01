@@ -1,0 +1,297 @@
+$.customer.address.city
+$.customer.orders
+$.customer.orders[].itemName
+
+
+{
+  "customer": {
+    "address": {
+      "city": "Mumbai"
+    },
+    "orders": [
+      { "itemName": "Pen" }
+    ]
+  }
+}
+
+
+
+package com.example.dataloader.service;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.*;
+
+import org.springframework.stereotype.Component;
+
+import java.util.*;
+
+@Component
+public class JsonPathBuilder {
+
+    private final ObjectMapper mapper = new ObjectMapper();
+
+    /**
+     * Build JSON dynamically from master + child rows
+     */
+    public JsonBuildResult buildJson(
+            Map<String, Object> masterRow,
+            Map<Long, List<Map<String, Object>>> childData,
+            List<JsonMapper> mappings) {
+
+        ObjectNode root = mapper.createObjectNode();
+        Map<String, String> referenceMap = new HashMap<>();
+
+        // MASTER mappings
+        mappings.stream()
+                .filter(m -> "MASTER".equalsIgnoreCase(m.getQueryType()))
+                .forEach(m -> applyMasterMapping(
+                        root,
+                        masterRow,
+                        m,
+                        referenceMap
+                ));
+
+        // CHILD mappings
+        Map<Long, List<JsonMapper>> childGroupedMappings =
+                groupChildMappings(mappings);
+
+        for (Map.Entry<Long, List<JsonMapper>> entry :
+                childGroupedMappings.entrySet()) {
+
+            Long subQueryId = entry.getKey();
+            List<JsonMapper> childMappings = entry.getValue();
+            List<Map<String, Object>> childRows =
+                    childData.get(subQueryId);
+
+            if (childRows == null) continue;
+
+            for (Map<String, Object> childRow : childRows) {
+                applyChildMapping(
+                        root,
+                        childRow,
+                        childMappings
+                );
+            }
+        }
+
+        return new JsonBuildResult(root, referenceMap);
+    }
+
+    // ================= MASTER ==================
+
+    private void applyMasterMapping(
+            ObjectNode root,
+            Map<String, Object> row,
+            JsonMapper mapperConfig,
+            Map<String, String> referenceMap) {
+
+        Object value = row.get(mapperConfig.getColumnName());
+
+        if (value == null &&
+                "Y".equalsIgnoreCase(mapperConfig.getIgnoreNull()))
+            return;
+
+        ObjectNode parentNode =
+                getOrCreateObjectNode(root, mapperConfig.getJPath());
+
+        setValue(parentNode, mapperConfig, value);
+
+        if ("Y".equalsIgnoreCase(
+                mapperConfig.getIsReferenceColumn())) {
+
+            referenceMap.put(
+                    mapperConfig.getReferenceKeyName(),
+                    value != null ? value.toString() : ""
+            );
+        }
+    }
+
+    // ================= CHILD ==================
+
+    private void applyChildMapping(
+            ObjectNode root,
+            Map<String, Object> row,
+            List<JsonMapper> mappings) {
+
+        for (JsonMapper m : mappings) {
+
+            Object value = row.get(m.getColumnName());
+
+            if (value == null &&
+                    "Y".equalsIgnoreCase(m.getIgnoreNull()))
+                continue;
+
+            ArrayNode arrayNode =
+                    getOrCreateArrayNode(root, m.getJPath());
+
+            ObjectNode childNode = mapper.createObjectNode();
+
+            setValue(childNode, m, value);
+
+            arrayNode.add(childNode);
+        }
+    }
+
+    // ================= VALUE SETTER ==================
+
+    private void setValue(
+            ObjectNode node,
+            JsonMapper config,
+            Object value) {
+
+        String field = config.getJsonField();
+        String type = config.getJsonDataType();
+
+        if (value == null) {
+            node.putNull(field);
+            return;
+        }
+
+        switch (type.toUpperCase()) {
+
+            case "STRING":
+                node.put(field, value.toString());
+                break;
+
+            case "NUMBER":
+                node.put(field,
+                        new java.math.BigDecimal(
+                                value.toString()));
+                break;
+
+            case "BOOLEAN":
+                node.put(field,
+                        Boolean.parseBoolean(value.toString()));
+                break;
+
+            default:
+                node.put(field, value.toString());
+        }
+    }
+
+    // ================= OBJECT NODE CREATOR ==================
+
+    private ObjectNode getOrCreateObjectNode(
+            ObjectNode root,
+            String jPath) {
+
+        String cleanPath =
+                jPath.replace("$.", "");
+
+        String[] parts = cleanPath.split("\\.");
+
+        ObjectNode current = root;
+
+        for (String part : parts) {
+
+            if (part.contains("[]"))
+                continue;
+
+            JsonNode next = current.get(part);
+
+            if (next == null || !next.isObject()) {
+                ObjectNode newNode =
+                        mapper.createObjectNode();
+                current.set(part, newNode);
+                current = newNode;
+            } else {
+                current = (ObjectNode) next;
+            }
+        }
+
+        return current;
+    }
+
+    // ================= ARRAY NODE CREATOR ==================
+
+    private ArrayNode getOrCreateArrayNode(
+            ObjectNode root,
+            String jPath) {
+
+        String cleanPath =
+                jPath.replace("$.", "")
+                        .replace("[]", "");
+
+        String[] parts = cleanPath.split("\\.");
+
+        ObjectNode current = root;
+
+        for (int i = 0; i < parts.length - 1; i++) {
+
+            JsonNode next = current.get(parts[i]);
+
+            if (next == null || !next.isObject()) {
+                ObjectNode newNode =
+                        mapper.createObjectNode();
+                current.set(parts[i], newNode);
+                current = newNode;
+            } else {
+                current = (ObjectNode) next;
+            }
+        }
+
+        String arrayField =
+                parts[parts.length - 1];
+
+        JsonNode arrNode =
+                current.get(arrayField);
+
+        if (arrNode == null || !arrNode.isArray()) {
+            ArrayNode newArr =
+                    mapper.createArrayNode();
+            current.set(arrayField, newArr);
+            return newArr;
+        }
+
+        return (ArrayNode) arrNode;
+    }
+
+    // ================= GROUP CHILD ==================
+
+    private Map<Long, List<JsonMapper>> groupChildMappings(
+            List<JsonMapper> mappings) {
+
+        Map<Long, List<JsonMapper>> grouped =
+                new HashMap<>();
+
+        for (JsonMapper m : mappings) {
+
+            if ("CHILD".equalsIgnoreCase(
+                    m.getQueryType())) {
+
+                grouped.computeIfAbsent(
+                        m.getSubQueryId(),
+                        k -> new ArrayList<>()
+                ).add(m);
+            }
+        }
+
+        return grouped;
+    }
+
+    // ================= RESULT WRAPPER ==================
+
+    public static class JsonBuildResult {
+
+        private final ObjectNode json;
+        private final Map<String, String> referenceMap;
+
+        public JsonBuildResult(
+                ObjectNode json,
+                Map<String, String> referenceMap) {
+            this.json = json;
+            this.referenceMap = referenceMap;
+        }
+
+        public ObjectNode getJson() {
+            return json;
+        }
+
+        public Map<String, String> getReferenceMap() {
+            return referenceMap;
+        }
+    }
+}
+
+
